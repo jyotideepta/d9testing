@@ -10,6 +10,9 @@ tasks:
     command: |
       sudo cp .gitpod/gitpod-setup-ddev.sh /usr/local/bin/.
       echo "System is ready, clone a project, `ddev config` if needed, and `gitpod-setup-ddev` to run it"
+      npm install composer
+      composer create-project drupal/recommended-project:^9
+      composer require 'drupal/cms_content_sync:^2.0' --with-dependencies
 
 # Set the following ports public
 ports:
