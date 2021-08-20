@@ -1,0 +1,5 @@
+cms_content_sync_migrate_acquia_content_hub.migrate_pushing:
+  title: 'Migrate Acquia Content Hub (Pushing)'
+  route_name: cms_content_sync_migrate_acquia_content_hub.migrate_pushing
+  base_route: entity.cms_content_sync.site
+  weight: 100

@@ -1,0 +1,7 @@
+cms_content_sync_developer.cms_content_sync_flow.add_flow_expert:
+  path: '/admin/config/services/cms_content_sync/flow/add/expert'
+  defaults:
+    _form: '\Drupal\cms_content_sync_developer\Form\FlowFormExpert'
+    _title: 'Add Flow (Expert)'
+  requirements:
+    _permission: 'administer cms content sync'

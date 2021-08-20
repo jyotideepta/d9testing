@@ -6,4 +6,6 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
+    'Twig_' => array($vendorDir . '/twig/twig/lib'),
+    'Dflydev\\DotAccessData' => array($vendorDir . '/dflydev/dot-access-data/src'),
 );

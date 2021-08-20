@@ -1,0 +1,40 @@
+{
+    "name": "edge-box/sync-core",
+    "type": "library",
+    "description": "The Sync Core PHP library.",
+    "homepage": "https://www.cms-content-sync.io/",
+    "license": "GPL-2.0-or-later",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "authors": [
+        {
+            "name": "Thiemo Müller",
+            "email": "thiemo@edge-box.com"
+        },
+        {
+            "name": "Sebastian Gurlt",
+            "email": "sebastian@edge-box.com"
+        }
+    ],
+    "support": {
+        "forum": "https://www.drupal.org/project/issues/cms_content_sync",
+        "slack": "https://drupal.slack.com/archives/CKN24APFC"
+    },
+    "scripts": {
+        "lint": "tools/vendor/bin/phplint ./ --exclude=vendor --warning",
+        "analyze": "tools/vendor/bin/phpstan analyse -c tools/phpstan.neon src",
+        "test-cs": "tools/vendor/bin/php-cs-fixer fix --dry-run --config tools/.php-cs-fixer.php",
+        "fix-cs": "tools/vendor/bin/php-cs-fixer fix --config tools/.php-cs-fixer.php"
+    },
+    "require": {
+        "php": ">=7.1.3",
+        "guzzlehttp/guzzle": "^6.0",
+        "firebase/php-jwt": "^5.2",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "EdgeBox\\SyncCore\\": "src/"
+        }
+    }
+}

@@ -1,0 +1,6 @@
+parameters:
+  # See https://phpstan.org/user-guide/rule-levels
+  level: 5
+  scanDirectories:
+    - ../../d8/docroot
+    - ../../../php-library

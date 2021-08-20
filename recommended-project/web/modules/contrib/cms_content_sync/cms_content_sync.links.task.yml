@@ -1,0 +1,47 @@
+cms_content_sync.site:
+  title: Site
+  route_name: cms_content_sync.site
+  base_route: cms_content_sync.site
+
+cms_content_sync.compatibility:
+  title: Compatibility
+  route_name: cms_content_sync.compatibility
+  base_route: cms_content_sync.site
+
+entity.cms_content_sync_pool.collection:
+  title: Pools
+  route_name: entity.cms_content_sync_pool.collection
+  base_route: cms_content_sync.site
+
+entity.cms_content_sync_flow.collection:
+  title: Flows
+  route_name: entity.cms_content_sync_flow.collection
+  base_route: cms_content_sync.site
+
+cms_content_sync.syndication:
+  title: Synchronize content
+  route_name: cms_content_sync.syndication
+  base_route: cms_content_sync.site
+
+cms_content_sync.settings_form:
+  title: Settings
+  route_name: cms_content_sync.settings_form
+  base_route: cms_content_sync.site
+
+cms_content_sync.cms_content_sync_debug_form:
+  title: Debug
+  route_name: cms_content_sync.cms_content_sync_debug_form
+  base_route: cms_content_sync.site
+
+entity.cms_content_sync.pull:
+  title: Pull
+  route_name: entity.cms_content_sync.content
+  base_route: system.admin_content
+  weight: 30
+
+entity.cms_content_sync.sync_status:
+  route_name: cms_content_sync.content_sync_status
+  base_route: entity.node.canonical
+  weight: 100
+  title: 'Sync status'
+  class: '\Drupal\cms_content_sync\Plugin\Menu\LocalTask\EntityStatus'

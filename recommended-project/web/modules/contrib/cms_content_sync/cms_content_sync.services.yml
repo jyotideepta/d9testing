@@ -1,0 +1,20 @@
+services:
+  plugin.manager.cms_content_sync_entity_handler:
+    class: Drupal\cms_content_sync\Plugin\Type\EntityHandlerPluginManager
+    arguments: ['@container.namespaces', '@cache.discovery', '@module_handler']
+  plugin.manager.cms_content_sync_field_handler:
+    class: Drupal\cms_content_sync\Plugin\Type\FieldHandlerPluginManager
+    arguments: ['@container.namespaces', '@cache.discovery', '@module_handler']
+  cms_content_sync.route_subscriber:
+    class: Drupal\cms_content_sync\Routing\RouteSubscriber
+    tags:
+      - { name: event_subscriber }
+  cms_content_sync.cli:
+    class: Drupal\cms_content_sync\Cli\CliService
+  cms_content_sync.config_subscriber:
+    class: Drupal\cms_content_sync\EventSubscriber\ConfigSubscriber
+    arguments: [
+      '@config.factory',
+      '@entity_type.manager']
+    tags:
+      - { name: event_subscriber }

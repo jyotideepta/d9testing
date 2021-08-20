@@ -1,0 +1,16 @@
+name: CMS Content Sync - Developer
+description: Provides additional developer functionalities. Further explanation could be found within the README.md.
+package: CMS Content Sync
+
+type: module
+core: 8.x
+core_version_requirement: ^8 || ^9
+
+dependencies:
+  - cms_content_sync:cms_content_sync
+  - config_ignore:config_ignore
+
+# Information added by Drupal.org packaging script on 2021-08-20
+version: '2.0.2'
+project: 'cms_content_sync'
+datestamp: 1629462072

@@ -1,0 +1,11 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - cms_content_sync
+    - cms_content_sync_views
+id: push_status_entity_to_v2
+label: 'Test push to v2'
+type: cms_content_sync_entity_status
+plugin: push_status_entity_to_v2
+configuration: {  }

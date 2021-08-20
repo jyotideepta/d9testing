@@ -1,0 +1,52 @@
+cms_content_sync.main:
+  title: 'Content Sync'
+  route_name: cms_content_sync.site
+  parent: system.admin_config_services
+  description: 'Content Sync'
+  weight: 100
+
+cms_content_sync.site:
+  title: 'Site'
+  route_name: cms_content_sync.site
+  parent: cms_content_sync.main
+  description: 'Content Sync - Site configuration'
+  weight: 1
+
+cms_content_sync.compatibility:
+  title: 'Compatibility'
+  route_name: cms_content_sync.compatibility
+  parent: cms_content_sync.main
+  description: 'Show potential compatibility issues and supported features at this site'
+  weight: 2
+
+entity.cms_content_sync.pools:
+  title: 'Pools'
+  route_name: entity.cms_content_sync_pool.collection
+  parent: cms_content_sync.main
+  description: 'The pool overview'
+  weight: 3
+
+entity.cms_content_sync.flows:
+  title: 'Flows'
+  route_name: entity.cms_content_sync_flow.collection
+  parent: cms_content_sync.main
+  description: 'The flow overview'
+  weight: 4
+
+cms_content_sync.syndication:
+  title: 'Synchronize content'
+  route_name: cms_content_sync.syndication
+  parent: cms_content_sync.main
+  description: 'Content Sync - Synchronize content'
+  weight: 5
+
+entity.cms_content_sync.settings:
+  title: 'Settings'
+  route_name: cms_content_sync.settings_form
+  parent: cms_content_sync.main
+  description: 'The general cms content sync settings'
+  weight: 6
+
+entity.cms_content_sync.content_dashboard:
+  class: Drupal\cms_content_sync\Plugin\Menu\ContentDashboard
+  deriver: Drupal\cms_content_sync\Plugin\Derivative\ContentDashboard

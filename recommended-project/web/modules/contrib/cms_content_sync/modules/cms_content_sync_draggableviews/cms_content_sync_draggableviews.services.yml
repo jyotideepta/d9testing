@@ -1,0 +1,5 @@
+services:
+  cms_content_sync_draggableviews.event_subscriber:
+    class: Drupal\cms_content_sync_draggableviews\EventSubscriber\DraggableViewsSyncExtend
+    tags:
+      - {name: event_subscriber}

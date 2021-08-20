@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * @file
+ */
+
+use Drupal\cms_content_sync\Controller\PushEntities;
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_form_alter().
+ */
+function cms_content_sync_draggableviews_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Filter the right form.
+  if (strpos($form_id, 'views_form_') === FALSE) {
+    return;
+  }
+
+  if (empty($form['actions']['save_order'])) {
+    return;
+  }
+
+  // If there is no results remove the save-order button.
+  if (!isset($form['draggableviews'][0])) {
+    return;
+  }
+
+  $form['actions']['save_order_and_push'] = $form['actions']['save_order'];
+
+  $form['actions']['save_order_and_push']['#value'] = Drupal::translation()->translate('Save order and push');
+  $form['actions']['save_order_and_push']['#submit'][] = 'cms_content_sync_draggableviews_views_submit';
+}
+
+/**
+ * Submit handler.
+ */
+function cms_content_sync_draggableviews_views_submit(&$form, FormStateInterface $form_state) {
+  $input = $form_state->getUserInput();
+
+  /** @var \Drupal\views\ViewExecutable $view */
+  $view = $form_state->getBuildInfo()['args'][0];
+  $entity_type = $view->getBaseEntityType();
+
+  if (!$entity_type) {
+    return;
+  }
+
+  $storage = Drupal::entityTypeManager()->getStorage($entity_type->id());
+
+  $operations = PushEntities::create(Drupal::getContainer());
+
+  $operations->skipUnpushed();
+
+  foreach ($input['draggableviews'] as $item) {
+    $entity = $storage->load($item['id']);
+    $operations->addEntity($entity);
+  }
+
+  $operations->showSkipped();
+
+  if ($operations->isEmpty()) {
+    return;
+  }
+
+  $operations->setCallback('cms_content_sync_draggableviews_batch_pushed');
+
+  $operations->start();
+}
+
+/**
+ * Pushing the content items was finished- show success / failure message and redirect to the order page.
+ *
+ * @param $success
+ * @param $results
+ * @param $operations
+ */
+function cms_content_sync_draggableviews_batch_pushed($success, $results, $operations) {
+  if (!$success) {
+    $message = t('Failed to push items.');
+    Drupal::messenger()->addMessage($message);
+  }
+
+  $succeeded = count(array_filter($results));
+  $failed = count($results) - $succeeded;
+  Drupal::messenger()->addMessage(t('%synchronized items have been pushed.', ['%synchronized' => $succeeded]));
+  if ($failed) {
+    Drupal::messenger()->addMessage(t('%synchronized items have not been pushed.', ['%synchronized' => $failed]));
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function cms_content_sync_draggableviews_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'form_alter') {
+    $module = 'cms_content_sync_draggableviews';
+
+    $group = $implementations[$module];
+    unset($implementations[$module]);
+    $implementations[$module] = $group;
+  }
+}

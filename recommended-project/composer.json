@@ -18,7 +18,9 @@
         "composer/installers": "^1.9",
         "drupal/core-composer-scaffold": "^9.2",
         "drupal/core-project-message": "^9.2",
-        "drupal/core-recommended": "^9.2"
+        "drupal/core-recommended": "^9.2",
+        "drupal/environment_indicator": "^4.0",
+        "drupal/webhooks": "^1.0@alpha"
     },
     "conflict": {
         "drupal/drupal": "*"
@@ -84,5 +86,8 @@
                 "      composer remove drupal/core-project-message"
             ]
         }
+    },
+    "require-dev": {
+        "drupal/cms_content_sync": "^2"
     }
 }

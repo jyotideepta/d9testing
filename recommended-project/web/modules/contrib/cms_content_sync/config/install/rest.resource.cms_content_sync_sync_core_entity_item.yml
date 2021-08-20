@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - cms_content_sync
+    - serialization
+  enforced:
+    module:
+      - cms_content_sync
+id: cms_content_sync_sync_core_entity_item
+plugin_id: cms_content_sync_sync_core_entity_item
+granularity: resource
+configuration:
+  methods:
+    - GET
+    - POST
+    - DELETE
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

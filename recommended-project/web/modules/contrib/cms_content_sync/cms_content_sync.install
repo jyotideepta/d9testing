@@ -1,0 +1,588 @@
+<?php
+
+/**
+ * @file
+ * Install file for cms_content_sync.
+ */
+
+use Drupal\cms_content_sync\Entity\Flow;
+use Drupal\cms_content_sync\Entity\Pool;
+use EdgeBox\SyncCore\Interfaces\IApplicationInterface;
+use Drupal\cms_content_sync\SyncCoreInterface\SyncCoreFactory;
+use Drupal\Component\Render\FormattableMarkup;
+use Drupal\Core\Link;
+use Drupal\Core\Site\Settings;
+use Drupal\user\Entity\User;
+use Drupal\Core\Config\FileStorage;
+use Drupal\Core\Field\BaseFieldDefinition;
+
+/**
+ * Common modules that need to execute before us:
+ * - default : 0
+ * - menu_link_content : 1
+ * - content_translation : 10
+ * - views : 10
+ * - paragraphs : 11.
+ */
+define('CMS_CONTENT_SYNC_MODULE_WEIGHT', 50);
+
+/**
+ * Update the weight of the Content Sync module. As Content Sync depends on
+ * other modules being run before it, we need to make sure our hooks like
+ * hook_form_alter are called after everyone else's.
+ * Symptoms if not done include:
+ * - Forms are partially still editable even if it should be forbidden, e.g. menu settings.
+ */
+function _cms_content_sync_set_module_weight() {
+  module_set_weight('cms_content_sync', CMS_CONTENT_SYNC_MODULE_WEIGHT);
+}
+
+/**
+ * Re-import the given config to reset it to defaults when they're changed in
+ * the module.
+ *
+ * @param $configsNames
+ * @param string $module
+ */
+function _cms_content_sync_update_config($configsNames) {
+  $config_path    = drupal_get_path('module', 'cms_content_sync') . '/config/install';
+  $source         = new FileStorage($config_path);
+  $config_storage = Drupal::service('config.storage');
+
+  foreach ($configsNames as $name) {
+    $config_storage->write($name, $source->read($name));
+  }
+}
+
+/**
+ * Implements hook_install().
+ *
+ * - Creates the CMS Content Sync user and provides him with all required permissions.
+ * - Sets module weight so we can hook in after all other content creation modules.
+ * - Displays message to start setting up the site.
+ */
+function cms_content_sync_install() {
+  $config_path    = drupal_get_path('module', 'cms_content_sync') . '/config/install';
+  $source         = new FileStorage($config_path);
+  $config_storage = Drupal::service('config.storage');
+
+  $configsNames = [
+    'key.key.cms_content_sync',
+    'encrypt.profile.cms_content_sync',
+  ];
+
+  foreach ($configsNames as $name) {
+    $config_storage->write($name, $source->read($name));
+  }
+
+  $username = 'CMS Content Sync';
+  Drupal::moduleHandler()->alter('cms_content_sync_username', $username);
+  $data = [
+    'userName' => $username,
+    'userPass' => user_password(64),
+  ];
+
+  $user = User::create();
+  $user->setUsername($data['userName']);
+  $user->setPassword($data['userPass']);
+  $user->enforceIsNew();
+  $user->activate();
+  $user->addRole('cms_content_sync');
+  $user->save();
+
+  // Store UID in key value table.
+  Drupal::service('keyvalue.database')->get('cms_content_sync_user')->set('uid', intval($user->id()));
+
+  $data     = cms_content_sync_encrypt_values($data);
+  $userData = Drupal::service('user.data');
+
+  $userData->set('cms_content_sync', $user->id(), 'sync_data', $data);
+
+  _cms_content_sync_set_module_weight();
+
+  Drupal::messenger()->addStatus(
+    new FormattableMarkup("Thanks for choosing Content Sync! @start.", [
+      '@start' => Link::createFromRoute("Setup your first content pool now", "entity.cms_content_sync_pool.add_form")->toString(),
+    ])
+  );
+  Drupal::messenger()->addStatus(
+    new FormattableMarkup('If you have connected another site already, @copy. Mirroring means you can simply swap the push and pull settings.', [
+      '@copy' => Link::createFromRoute("copy or mirror the configuration from another site", "entity.cms_content_sync_flow.copy_remote")->toString(),
+    ])
+  );
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function cms_content_sync_uninstall() {
+  // Delete CMS Content Sync User.
+  $user = User::load(CMS_CONTENT_SYNC_USER_ID);
+  if (isset($user)) {
+    $user->delete();
+  }
+
+  // Delete entry from key value table.
+  Drupal::service('keyvalue.database')->get('cms_content_sync_user')->delete('uid');
+
+  /**
+   * @var \Drupal\Core\Config\CachedStorage $config_storage
+   */
+  $config_storage = Drupal::service('config.storage');
+
+  // Drupal doesn't delete config automatically, so we need to ensure that
+  // everything is deleted properly. Otherwise you may get a fatal error after
+  // uninstalling the module about missing REST interfaces or you may not be
+  // able to install the module again afterwards.
+  $configsNames = [
+    'key.key.cms_content_sync',
+    'encrypt.profile.cms_content_sync',
+    'rest.resource.cms_content_sync_entity_resource',
+    'rest.resource.cms_content_sync_import_entity',
+    'rest.resource.cms_content_sync_sync_core_entity_item',
+    'rest.resource.cms_content_sync_sync_core_entity_list',
+    'system.action.node_cms_content_sync_export_action',
+    'user.role.cms_content_sync',
+    'system.action.user_remove_role_action.cms_content_sync',
+    'system.action.user_add_role_action.cms_content_sync',
+  ];
+
+  foreach ($configsNames as $name) {
+    $config_storage->delete($name);
+  }
+}
+
+/**
+ * Implements hook_requirements.
+ *
+ * @param $phase
+ *
+ * @return array
+ */
+function cms_content_sync_requirements($phase) {
+  $requirements = [];
+  if ($phase == 'runtime') {
+
+    // Show error when the Content Sync user aint got the role Content Sync role.
+    $users = Drupal::entityTypeManager()
+      ->getStorage('user')
+      ->loadByProperties([
+        'name' => 'CMS Content Sync',
+      ]);
+
+    if ($users) {
+      $user = reset($users);
+      if (!$user->hasRole('cms_content_sync')) {
+        $requirements['cms_content_sync_user_role_missing'] = [
+          'title' => t('CMS Content Sync'),
+          'value' => t('The service user "@username" is missing the required service role "Content Sync", this will cause several issues while trying to export/import entities.', [
+            '@username' => $user->getAccountName(),
+          ]),
+          'severity' => REQUIREMENT_ERROR,
+        ];
+      }
+    }
+
+    // Get Sync Core Version.
+    $sync_cores = SyncCoreFactory::getAllSyncCores();
+    if ($sync_cores) {
+      foreach ($sync_cores as $id => $sync_core) {
+        $status = [];
+        try {
+          $status = $sync_core->getReportingService()->getStatus();
+        }
+        catch (Exception $e) {
+
+          // Can't connect.
+          $requirements['cms_content_sync_sync_core_' . $id . '_status'] = [
+            'title' => t('CMS Content Sync'),
+            'value' => t('Can not connect:<br>Sync Core Host: @id', [
+              '@id' => $id,
+            ]),
+            'severity' => REQUIREMENT_ERROR,
+          ];
+        }
+
+        if ($status) {
+
+          // Get module Version.
+          $module_info = Drupal::service('extension.list.module')->getExtensionInfo('cms_content_sync');
+          if (!empty($module_info['version'])) {
+            $module_version = $module_info['version'];
+            $module_version = preg_replace('@^\d\.x-(.*)$@', '$1', $module_version);
+          }
+
+          // Connected and core == module version.
+          if (!empty($module_version) && (substr($status['version'],-2)==='.x' ? explode('.',$module_version)[0] == explode('.',$status['version'])[0] : $module_version == $status['version'])) {
+            $requirements['cms_content_sync_sync_core_' . $id . '_status'] = [
+              'title' => t('CMS Content Sync'),
+              'value' => t(
+                'Connected:<br>Sync Core Host: @id<br>Sync Core Version: @sync_core_version<br>Content Sync Module Version: @module_version', [
+                  '@id' => $id,
+                  '@sync_core_version' => $status['version'],
+                  '@module_version' => $module_version,
+                ]),
+              'severity' => REQUIREMENT_INFO,
+            ];
+          }
+
+          // Connected but core != module version.
+          elseif (!empty($module_version)) {
+            $requirements['cms_content_sync_sync_core_' . $id . '_status'] = [
+              'title' => t('CMS Content Sync'),
+              'value' => t(
+                'Connected:<br> Sync Core Host: @id<br>Sync Core Version: @sync_core_version <br> Content Sync Module Version: @module_version <br><br> The CMS Content Sync module version
+                        does not match the Sync Core Version. It is <b>highly recommend</b> to update the CMS Content Sync module to match the version of the Sync Core.', [
+                          '@id' => $id,
+                          '@sync_core_version' => $status['version'],
+                          '@module_version' => $module_version,
+                        ]),
+              'severity' => REQUIREMENT_WARNING,
+            ];
+          }
+
+          // Connected but can't get module version.
+          else {
+            $requirements['cms_content_sync_sync_core_' . $id . '_status'] = [
+              'title' => t('CMS Content Sync'),
+              'value' => t(
+                'Connected:<br> Sync Core Host: @id<br>Sync Core Version: @sync_core_version <br><br> <i>The CMS Content Sync module version could not be determined.
+                        This is ususally caused by the fact that the dev version of the module is being used, or the Core "Update manager" module is not enabled.</i>', [
+                          '@id' => $id,
+                          '@sync_core_version' => $status['version'],
+                        ]),
+              'severity' => REQUIREMENT_INFO,
+            ];
+          }
+        }
+
+      }
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Add the REST interface to access an individual entity.
+ */
+function cms_content_sync_update_8020()
+{
+  _cms_content_sync_update_config([
+    'rest.resource.cms_content_sync_sync_core_entity_item',
+    'rest.resource.cms_content_sync_sync_core_entity_list',
+    'user.role.cms_content_sync',
+  ]);
+
+  return 'Added REST interface for Sync Core v2.';
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Move base_url to key_value store.
+ */
+function cms_content_sync_update_8013()
+{
+  $base_url = \Drupal::config('cms_content_sync.settings')->get('cms_content_sync_base_url');
+  \Drupal::state()->set('cms_content_sync.base_url', $base_url);
+  \Drupal::configFactory()->getEditable('cms_content_sync.settings')->clear('cms_content_sync_base_url')->save();
+
+  return 'Move base_url to key_value store.';
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Move site id key_value store.
+ */
+function cms_content_sync_update_8012()
+{
+  $site_id = \Drupal::config('cms_content_sync.settings')->get('cms_content_sync_site_id');
+  \Drupal::state()->set('cms_content_sync.site_id', $site_id);
+  \Drupal::configFactory()->getEditable('cms_content_sync.settings')->clear('cms_content_sync_site_id')->save();
+
+  return 'Move site id to key_value store.';
+}
+
+/**
+ * Unset parent_id handler for paragraphs as it's using a local ID and we re-set
+ * it later anyway.
+ */
+function cms_content_sync_update_8011() {
+  foreach (Flow::getAll(FALSE) as $flow) {
+    $changed = FALSE;
+    foreach ($flow->sync_entities as $key => &$config) {
+      if (substr_count($key, '-') !== 2) {
+        continue;
+      }
+
+      list($entity_type,, $field_name) = explode('-', $key);
+
+      if ($entity_type === 'paragraph' && $field_name === 'parent_id' && isset($config['handler']) && $config['handler'] !== 'ignore') {
+        $config['handler'] = 'ignore';
+        $config['export'] = 'disabled';
+        $config['import'] = 'disabled';
+        $changed = TRUE;
+      }
+    }
+
+    if ($changed) {
+      $flow->save();
+    }
+  }
+
+  return 'Removed parent_id property for paragraphs from all Flows. Please re-export your Flows.';
+}
+
+/**
+ * Promote Site ID + Authentication type as a side-wide property rather than a setting per pool.
+ */
+function cms_content_sync_update_8010() {
+  /**
+   * Part 1: Authentication type. Saved as configuration so it can be deployed.
+   */
+  $authentication_type = NULL;
+  $config_factory = Drupal::configFactory();
+
+  // Check that all Site IDs are set to the same value in all pools.
+  foreach (Pool::getAll() as $pool) {
+    // In case someone runs this update late.
+    if (!$pool->authentication_type) {
+      continue;
+    }
+
+    if (!$authentication_type || $pool->authentication_type === IApplicationInterface::AUTHENTICATION_TYPE_BASIC_AUTH) {
+      $authentication_type = $pool->authentication_type;
+    }
+  }
+
+  if ($authentication_type) {
+    $config_factory
+      ->getEditable('cms_content_sync.settings')
+      ->set('cms_content_sync_authentication_type', $authentication_type)
+      ->save();
+  }
+
+  // Unset duplicate data now.
+  foreach (Pool::getAll() as $pool) {
+    $pool->authentication_type = NULL;
+    $pool->save();
+  }
+
+  /**
+   * Part 2: Site ID. Saved as State so it can't be deployed.
+   */
+  $site_id = NULL;
+  $pool_site_id = NULL;
+  $cms_content_sync_settings = Settings::get('cms_content_sync');
+
+  // Check that all Site IDs are set to the same value in all pools.
+  foreach (Pool::getAll() as $pool) {
+    // Check for overwritten pool site_id.
+    if (isset($cms_content_sync_settings) && isset($cms_content_sync_settings['pools'][$pool->id]['site_id'])) {
+      $pool_site_id = $cms_content_sync_settings['pools'][$pool->id]['site_id'];
+    }
+    else {
+      $pool_site_id = $pool->site_id;
+    }
+
+    // In case someone runs this update late.
+    if (!$pool_site_id) {
+      continue;
+    }
+
+    if ($site_id) {
+      if ($site_id !== $pool_site_id) {
+        throw new Exception('Site ID must be unique per site. Please update your pool configuration or settings.php configuration for the pool overrides to reflect that and try again.');
+      }
+    }
+    else {
+      $site_id = $pool_site_id;
+    }
+  }
+
+  if ($site_id) {
+    Drupal::state()->set('cms_content_sync.site_machine_name', $site_id);
+  }
+
+  // Verify everything's okay. Will also export the site's name for better usability.
+  foreach (SyncCoreFactory::getAllSyncCores() as $core) {
+    $core->registerSite();
+  }
+
+  // Unset duplicate data now.
+  foreach (Pool::getAll() as $pool) {
+    $pool->site_id = NULL;
+    $pool->save();
+  }
+
+  return 'Changed site ID and authentication type to be set per site, not per pool.';
+}
+
+/**
+ * Add index for status entities on entity_type and entity_uuid.
+ */
+function cms_content_sync_update_8009() {
+  $spec = [
+    "fields" => [
+      "entity_type" => [
+        "type" => "varchar",
+        "length" => 255,
+        "not null" => TRUE,
+      ],
+      "entity_uuid" => [
+        "type" => "varchar",
+        "length" => 32,
+        "not null" => TRUE,
+      ],
+    ],
+  ];
+
+  $fields = ["entity_type", "entity_uuid"];
+  $schema = Drupal::database()->schema();
+  $schema->addIndex("cms_content_sync_entity_status", "cms_content_sync__type_uuid", $fields, $spec);
+
+  return 'Added index to entity status table to improve performance.';
+}
+
+/**
+ * Merge error: Ignore update hook.
+ */
+function cms_content_sync_update_8008(&$sandbox) {
+  return 'Done';
+}
+
+/**
+ * Merge error; Ignore update hook.
+ */
+function cms_content_sync_update_8007(&$sandbox) {
+  return 'Done';
+}
+
+/**
+ * Rebuild menu cache to ensure route changes are taken into account.
+ */
+function cms_content_sync_update_8006(&$sandbox) {
+  Drupal::service('cache_tags.invalidator')->invalidateTags(['config:system.menu.admin']);
+
+  return 'Rebuild menu cache to ensure route changes are taken into account.';
+}
+
+/**
+ * Update the module weight.
+ */
+function cms_content_sync_update_8005(&$sandbox) {
+  _cms_content_sync_set_module_weight();
+
+  return 'Updated module weight to execute hooks after most other modules.';
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Update the REST interface for entities to allow Basic Auth.
+ */
+function cms_content_sync_update_8004(&$sandbox) {
+  _cms_content_sync_update_config([
+    'rest.resource.cms_content_sync_entity_resource',
+  ]);
+
+  return 'Added Basic Auth as allowed authentication method to entity resource.';
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Delete unused rest interface configuration.
+ */
+function cms_content_sync_update_8003(&$sandbox) {
+  Drupal::configFactory()->getEditable('rest.resource.cms_content_sync_preview_resource')->delete();
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Add the new REST interface for manual import.
+ */
+function cms_content_sync_update_8002(&$sandbox) {
+  _cms_content_sync_update_config([
+    'rest.resource.cms_content_sync_import_entity',
+  ]);
+
+  return 'Installed manual entity import functionality.';
+}
+
+/**
+ * Implements hook_update_N();.
+ *
+ * Update field type for cms_content_sync_entity_status entity. Fields: last_export, last_import.
+ */
+function cms_content_sync_update_8001(&$sandbox) {
+  $entity_type_manager = Drupal::entityTypeManager();
+  $bundle_of = 'cms_content_sync_entity_status';
+
+  $storage = $entity_type_manager->getStorage($bundle_of);
+  $bundle_definition = $entity_type_manager->getDefinition($bundle_of);
+  $id_key = $bundle_definition->getKey('id');
+  $table_name = $storage->getDataTable() ?: $storage->getBaseTable();
+  $database = Drupal::database();
+  $definition_manager = Drupal::entityDefinitionUpdateManager();
+
+  // Store the existing values for last_export.
+  $last_export_values = $database->select($table_name)
+    ->fields($table_name, [$id_key, 'last_export'])
+    ->execute()
+    ->fetchAllKeyed();
+
+  // Store the existing values for last_import.
+  $last_import_values = $database->select($table_name)
+    ->fields($table_name, [$id_key, 'last_import'])
+    ->execute()
+    ->fetchAllKeyed();
+
+  // Clear out the values.
+  $database->update($table_name)
+    ->fields([
+      'last_export' => NULL,
+      'last_import' => NULL,
+    ])
+    ->execute();
+
+  // Uninstall the old fields.
+  $field_storage_definition_last_export = $definition_manager->getFieldStorageDefinition('last_export', $bundle_of);
+  $definition_manager->uninstallFieldStorageDefinition($field_storage_definition_last_export);
+  $field_storage_definition_last_import = $definition_manager->getFieldStorageDefinition('last_import', $bundle_of);
+  $definition_manager->uninstallFieldStorageDefinition($field_storage_definition_last_import);
+
+  // Prepare new fields.
+  $new_last_export = BaseFieldDefinition::create('timestamp')
+    ->setLabel(t('Last exported'))
+    ->setDescription(t('The last time the entity got exported.'))
+    ->setRequired(FALSE);
+
+  $new_last_import = BaseFieldDefinition::create('timestamp')
+    ->setLabel(t('Last import'))
+    ->setDescription(t('The last time the entity got imported.'))
+    ->setRequired(FALSE);
+
+  // Create new fields.
+  $definition_manager->installFieldStorageDefinition('last_export', $bundle_of, $bundle_of, $new_last_export);
+  $definition_manager->installFieldStorageDefinition('last_import', $bundle_of, $bundle_of, $new_last_import);
+
+  // Restore the values.
+  foreach ($last_export_values as $id => $value) {
+    $database->update($table_name)
+      ->fields(['last_export' => $value])
+      ->condition($id_key, $id)
+      ->execute();
+  }
+  foreach ($last_import_values as $id => $value) {
+    $database->update($table_name)
+      ->fields(['last_import' => $value])
+      ->condition($id_key, $id)
+      ->execute();
+  }
+}

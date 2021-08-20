@@ -1,0 +1,31 @@
+entity.cms_content_sync.sync_health:
+  path: '/admin/content/sync-health'
+  defaults:
+    _controller: '\Drupal\cms_content_sync_health\Controller\SyncHealth::overview'
+    _title: 'Sync Health'
+  requirements:
+    _permission: 'access sync health'
+
+entity.cms_content_sync.sync_health.version_mismatches:
+  path: '/admin/content/sync-health/pushing/version-mismatches'
+  defaults:
+    _controller: '\Drupal\cms_content_sync_health\Controller\VersionMismatches::aggregate'
+    _title: 'Version mismatches'
+  requirements:
+    _permission: 'access sync health'
+
+entity.cms_content_sync.sync_health.pushing:
+  path: '/admin/content/sync-health/pushing'
+  defaults:
+    _controller: '\Drupal\cms_content_sync_health\Controller\SyncHealth::pushing'
+    _title: 'Sync Health - Pushing'
+  requirements:
+    _permission: 'access sync health'
+
+entity.cms_content_sync.sync_health.pulling:
+  path: '/admin/content/sync-health/pulling'
+  defaults:
+    _controller: '\Drupal\cms_content_sync_health\Controller\SyncHealth::pulling'
+    _title: 'Sync Health - Pulling'
+  requirements:
+    _permission: 'access sync health'

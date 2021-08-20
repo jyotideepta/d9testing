@@ -1,0 +1,14 @@
+name: Webhooks Test
+type: module
+description: The webhooks test module.
+package: Webhooks
+core: 8.x
+core_version_requirement: ^8 || ^9
+dependencies:
+  - webhooks
+hidden: true
+
+# Information added by Drupal.org packaging script on 2021-08-06
+version: '8.x-1.0-alpha9'
+project: 'webhooks'
+datestamp: 1628239164

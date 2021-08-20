@@ -1,0 +1,86 @@
+{#
+/**
+ * @file
+ * Template file for the show usage modal.
+ */
+#}
+
+<h2>
+  {{ 'Failed pushes'|trans }}
+</h2>
+
+<h3>{{ 'Hard failures'|trans }}</h3>
+{% if push_failures_hard.total %}
+  <div class="messages messages--error">
+  There were errors pushing {{ push_failures_hard.total }} entities:
+    <ul>
+      {% if push_failures_hard.request_failed %}
+        <li>{{ push_failures_hard.request_failed }} times the Sync Core couldn't be reached.</li>
+      {% endif %}
+      {% if push_failures_hard.internal_error %}
+        <li>{{ push_failures_hard.internal_error }} times the Drupal API threw an unexpected error.</li>
+      {% endif %}
+      {% if push_failures_hard.invalid_status_code %}
+        <li>{{ push_failures_hard.invalid_status_code }} times the Sync Core sent an unexpected (non-OK) response.</li>
+      {% endif %}
+      {% if push_failures_hard.dependency_push_failed %}
+        <li>{{ push_failures_hard.dependency_push_failed }} times the push of a referenced entity failed (see above).</li>
+      {% endif %}
+    </ul>
+  </div>
+{% else %}
+  <div class="messages messages--status">
+    No hard failures.
+  </div>
+{% endif %}
+
+<h3>{{ 'Soft failures'|trans }}</h3>
+{% if push_failures_soft.total %}
+  <div class="messages messages--warning">
+    The push of {{ push_failures_soft.total }} entities have been ignored as configured:
+    <ul>
+      {% if push_failures_soft.handler_denied %}
+        <li>{{ push_failures_soft.handler_denied }} times the handler was configured to explicitly ignore this entity (e.g. it's not published).</li>
+      {% endif %}
+      {% if push_failures_soft.unchanged %}
+        <li>{{ push_failures_soft.unchanged }} times the entity didn't change since it's last push.</li>
+      {% endif %}
+    </ul>
+    You can ignore this information unless you're trying to figure out why a specific entity has not been pushed.
+  </div>
+{% else %}
+  <div class="messages messages--status">
+    No soft failures.
+  </div>
+{% endif %}
+
+
+<h2>
+  {{ 'Pending pushs'|trans }}
+</h2>
+
+<h3>{{ 'Stale entities'|trans }}</h3>
+These are entities that should be automatically pushed, but weren't pushed yet with the "Push All" operation of the
+Flow after the initial configuration. So they existed before the Flow was created.
+{% if pending.stale_entities %}
+  <div class="messages messages--warning">
+    {{ pending.stale_entities }} entities are not pushed yet. Please use the "Push All" operation of the Flow to push them.
+  </div>
+{% else %}
+  <div class="messages messages--status">
+    No stale entities.
+  </div>
+{% endif %}
+
+<h3>{{ 'Version changed'|trans }}</h3>
+The entity type of these entities has been changed, but they weren't pushed yet with the changed fields.
+{% if pending.version_changed %}
+  <div class="messages messages--warning">
+    {{ pending.version_changed }} entities are not pushed yet after their entity type changed.
+  </div>
+{% else %}
+  <div class="messages messages--status">
+    No entities with changed entity type definitions that require push.
+  </div>
+{% endif %}
+

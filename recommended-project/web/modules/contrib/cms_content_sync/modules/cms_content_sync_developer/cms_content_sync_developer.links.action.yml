@@ -1,0 +1,5 @@
+cms_content_sync_developer.cms_content_sync_flow.add_flow_expert:
+  route_name: 'cms_content_sync_developer.cms_content_sync_flow.add_flow_expert'
+  title: 'Add flow (Expert)'
+  appears_on:
+    - entity.cms_content_sync_flow.collection

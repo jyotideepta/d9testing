@@ -1,0 +1,20 @@
+{
+  "name": "drupal/cms_content_sync_views",
+  "description": "Views submodule of the Content Sync module",
+  "type": "drupal-module",
+  "license": "GPL-2.0+",
+  "authors": [
+    {
+      "name": "Edge Box GmbH",
+      "homepage": "https://cms-content-sync.io/"
+    }
+  ],
+  "require": {
+    "drupal/cms_content_sync": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Drupal\\cms_content_sync_views\\": "src/"
+    }
+  }
+}
