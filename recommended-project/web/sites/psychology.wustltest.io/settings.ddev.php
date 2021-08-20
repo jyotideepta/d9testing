@@ -18,7 +18,7 @@ if (empty(getenv('DDEV_PHP_VERSION') && getenv('IS_DDEV_PROJECT') == 'true')) {
 }
 
 $databases['default']['default'] = array(
-  'database' => "db",
+  'database' => "psychology",
   'username' => "db",
   'password' => "db",
   'host' => $host,
